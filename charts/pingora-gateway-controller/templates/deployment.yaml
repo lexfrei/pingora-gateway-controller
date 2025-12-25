@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pingora-gw-ctrl.fullname" . }}
+  labels:
+    {{- include "pingora-gw-ctrl.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "pingora-gw-ctrl.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "pingora-gw-ctrl.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      serviceAccountName: {{ include "pingora-gw-ctrl.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 30 }}
+      {{- with .Values.dnsPolicy }}
+      dnsPolicy: {{ . }}
+      {{- end }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--gateway-class-name={{ .Values.controller.gatewayClassName }}"
+            - "--controller-name={{ .Values.controller.controllerName }}"
+            {{- if .Values.controller.clusterDomain }}
+            - "--cluster-domain={{ .Values.controller.clusterDomain }}"
+            {{- end }}
+            - "--metrics-addr=:{{ .Values.service.metricsPort }}"
+            - "--health-addr=:{{ .Values.service.healthPort }}"
+            - "--log-level={{ .Values.controller.logLevel }}"
+            - "--log-format={{ .Values.controller.logFormat }}"
+            {{- if .Values.leaderElection.enabled }}
+            - "--leader-elect=true"
+            - "--leader-election-name={{ .Values.leaderElection.leaseName }}"
+            {{- if .Values.leaderElection.namespace }}
+            - "--leader-election-namespace={{ .Values.leaderElection.namespace }}"
+            {{- else }}
+            - "--leader-election-namespace={{ .Release.Namespace }}"
+            {{- end }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.service.metricsPort }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.service.healthPort }}
+              protocol: TCP
+          {{- if .Values.healthProbes.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.healthPort }}
+            initialDelaySeconds: {{ .Values.healthProbes.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthProbes.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthProbes.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthProbes.startupProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.healthProbes.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.healthPort }}
+            initialDelaySeconds: {{ .Values.healthProbes.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthProbes.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthProbes.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthProbes.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.healthProbes.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.service.healthPort }}
+            initialDelaySeconds: {{ .Values.healthProbes.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthProbes.readinessProbe.periodSeconds }}
+            {{- if .Values.healthProbes.readinessProbe.timeoutSeconds }}
+            timeoutSeconds: {{ .Values.healthProbes.readinessProbe.timeoutSeconds }}
+            {{- end }}
+            {{- if .Values.healthProbes.readinessProbe.failureThreshold }}
+            failureThreshold: {{ .Values.healthProbes.readinessProbe.failureThreshold }}
+            {{- end }}
+          {{- end }}
+          resources:
+            {{- if .Values.resources }}
+            {{- toYaml .Values.resources | nindent 12 }}
+            {{- else }}
+            # Recommended defaults for production
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

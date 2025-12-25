@@ -1,0 +1,14 @@
+apiVersion: pingora.k8s.lex.la/v1alpha1
+kind: PingoraConfig
+metadata:
+  name: pingora-config
+spec:
+  # Pingora proxy gRPC endpoint address (required)
+  address: "pingora-proxy.pingora-system.svc.cluster.local:50051"
+
+  # TLS configuration for gRPC connection (optional)
+  tls:
+    enabled: false
+    # Reference to Secret containing TLS certificates
+    # secretRef:
+    #   name: pingora-tls

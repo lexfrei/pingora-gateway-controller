@@ -1,0 +1,10 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: pingora
+spec:
+  controllerName: pingora.k8s.lex.la/tunnel-controller
+  parametersRef:
+    group: pingora.k8s.lex.la
+    kind: GatewayClassConfig
+    name: pingora-config

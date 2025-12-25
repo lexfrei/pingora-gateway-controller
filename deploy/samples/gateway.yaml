@@ -1,0 +1,15 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: pingora
+  namespace: pingora-system
+spec:
+  gatewayClassName: pingora
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      # Allow HTTPRoutes from all namespaces
+      allowedRoutes:
+        namespaces:
+          from: All

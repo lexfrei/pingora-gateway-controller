@@ -1,0 +1,44 @@
+# Binaries
+/controller
+*.exe
+*.dll
+*.so
+*.dylib
+dist/
+
+# Test coverage
+*.out
+coverage.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+
+# Secrets and credentials
+*credentials*.yaml
+*.key
+*.pem
+.env
+*.secret
+
+# Build artifacts
+*.log
+site/
+
+# Kubebuilder
+bin/
+testbin/
+
+# Personal notes
+TODO.md

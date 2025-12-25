@@ -1,0 +1,5 @@
+/*
+Copyright 2024-2025 Aleksei Sviridkin.
+
+Licensed under the BSD 3-Clause License.
+*/

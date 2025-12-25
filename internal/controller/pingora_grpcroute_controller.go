@@ -1,0 +1,363 @@
+package controller
+
+import (
+	"context"
+	"sync/atomic"
+
+	"github.com/cockroachdb/errors"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
+
+	"github.com/lexfrei/pingora-gateway-controller/api/v1alpha1"
+	"github.com/lexfrei/pingora-gateway-controller/internal/logging"
+	"github.com/lexfrei/pingora-gateway-controller/internal/routebinding"
+)
+
+const (
+	// Route status messages for Pingora GRPC routes.
+	pingoraGRPCRouteAcceptedMessage = "Route accepted and programmed in Pingora proxy"
+)
+
+// PingoraGRPCRouteReconciler reconciles GRPCRoute resources and synchronizes them
+// to Pingora proxy via gRPC.
+//
+// Key behaviors:
+//   - Watches all GRPCRoute resources in the cluster
+//   - Filters routes by parent Gateway's GatewayClass
+//   - Uses shared PingoraRouteSyncer for unified sync with HTTPRoutes
+//   - Updates Pingora proxy config via gRPC (hot-reload)
+//   - Updates GRPCRoute status with acceptance conditions
+//
+// On startup, the reconciler performs a full sync to ensure Pingora configuration
+// matches the current state of route resources.
+type PingoraGRPCRouteReconciler struct {
+	client.Client
+
+	// Scheme is the runtime scheme for API type registration.
+	Scheme *runtime.Scheme
+
+	// GatewayClassName filters which routes to process.
+	GatewayClassName string
+
+	// ControllerName is reported in GRPCRoute status.
+	ControllerName string
+
+	// RouteSyncer provides unified sync for both HTTP and GRPC routes.
+	RouteSyncer *PingoraRouteSyncer
+
+	// bindingValidator validates route binding to Gateway listeners.
+	bindingValidator *routebinding.Validator
+
+	// startupComplete indicates whether the startup sync has completed.
+	// This prevents race conditions between startup sync and reconcile loop.
+	startupComplete atomic.Bool
+}
+
+func (r *PingoraGRPCRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// Wait for startup sync to complete before processing reconcile events
+	// to prevent race conditions with gRPC updates
+	if !r.startupComplete.Load() {
+		return ctrl.Result{RequeueAfter: startupPendingRequeueDelay}, nil
+	}
+
+	ctx = logging.WithReconcileID(ctx)
+	logger := logging.Component(ctx, "pingora-grpcroute-reconciler").With("grpcroute", req.String())
+	ctx = logging.WithLogger(ctx, logger)
+
+	var route gatewayv1.GRPCRoute
+	if err := r.Get(ctx, req.NamespacedName, &route); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("grpcroute deleted, triggering full sync")
+
+			return r.syncAndUpdateStatus(ctx)
+		}
+
+		return ctrl.Result{}, errors.Wrap(err, "failed to get grpcroute")
+	}
+
+	if !r.isRouteForOurGateway(ctx, &route) {
+		return ctrl.Result{}, nil
+	}
+
+	logger.Info("reconciling grpcroute")
+
+	return r.syncAndUpdateStatus(ctx)
+}
+
+func (r *PingoraGRPCRouteReconciler) syncAndUpdateStatus(ctx context.Context) (ctrl.Result, error) {
+	logger := logging.FromContext(ctx)
+
+	result, syncResult, syncErr := r.RouteSyncer.SyncAllRoutes(ctx)
+
+	// Update status for all GRPC routes with per-parent binding results
+	var statusUpdateErr error
+
+	if syncResult != nil {
+		for i := range syncResult.GRPCRoutes {
+			route := &syncResult.GRPCRoutes[i]
+			routeKey := route.Namespace + "/" + route.Name
+			bindingInfo := syncResult.GRPCRouteBindings[routeKey]
+
+			if err := r.updateRouteStatus(ctx, route, bindingInfo, syncErr); err != nil {
+				logger.Error("failed to update grpcroute status", "error", err)
+				// Keep first error to return for requeue with backoff
+				if statusUpdateErr == nil {
+					statusUpdateErr = err
+				}
+			}
+		}
+	}
+
+	if syncErr != nil && result.RequeueAfter == 0 {
+		// Don't propagate error for non-retriable errors
+		return result, nil
+	}
+
+	// Return error if status updates failed - controller-runtime will requeue with backoff
+	if statusUpdateErr != nil {
+		return ctrl.Result{}, statusUpdateErr
+	}
+
+	return result, nil
+}
+
+func (r *PingoraGRPCRouteReconciler) isRouteForOurGateway(ctx context.Context, route *gatewayv1.GRPCRoute) bool {
+	return IsRouteAcceptedByGateway(ctx, r.Client, r.bindingValidator, r.GatewayClassName, GRPCRouteWrapper{route})
+}
+
+//nolint:funlen,dupl // status update logic; similar structure to HTTPRoute controller is intentional
+func (r *PingoraGRPCRouteReconciler) updateRouteStatus(
+	ctx context.Context,
+	route *gatewayv1.GRPCRoute,
+	bindingInfo routeBindingInfo,
+	syncErr error,
+) error {
+	routeKey := types.NamespacedName{Name: route.Name, Namespace: route.Namespace}
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Get fresh copy of the route to avoid conflict errors
+		var freshRoute gatewayv1.GRPCRoute
+		if err := r.Get(ctx, routeKey, &freshRoute); err != nil {
+			return errors.Wrap(err, "failed to get fresh grpcroute")
+		}
+
+		now := metav1.Now()
+		freshRoute.Status.Parents = nil
+
+		for refIdx, ref := range freshRoute.Spec.ParentRefs {
+			if ref.Kind != nil && *ref.Kind != kindGateway {
+				continue
+			}
+
+			namespace := freshRoute.Namespace
+			if ref.Namespace != nil {
+				namespace = string(*ref.Namespace)
+			}
+
+			var gateway gatewayv1.Gateway
+			if err := r.Get(ctx, client.ObjectKey{Name: string(ref.Name), Namespace: namespace}, &gateway); err != nil {
+				continue
+			}
+
+			if gateway.Spec.GatewayClassName != gatewayv1.ObjectName(r.GatewayClassName) {
+				continue
+			}
+
+			// Get binding result for this parent ref
+			bindingResult, hasBinding := bindingInfo.bindingResults[refIdx]
+
+			status := metav1.ConditionTrue
+			reason := string(gatewayv1.RouteReasonAccepted)
+			message := pingoraGRPCRouteAcceptedMessage
+
+			if syncErr != nil {
+				status = metav1.ConditionFalse
+				reason = string(gatewayv1.RouteReasonPending)
+				message = syncErr.Error()
+			} else if hasBinding && !bindingResult.Accepted {
+				status = metav1.ConditionFalse
+				reason = string(bindingResult.Reason)
+				message = bindingResult.Message
+			}
+
+			// Create copy to avoid pointer to loop variable
+			parentNS := gatewayv1.Namespace(namespace)
+
+			parentStatus := gatewayv1.RouteParentStatus{
+				ParentRef: gatewayv1.ParentReference{
+					Group:       ref.Group,
+					Kind:        ref.Kind,
+					Namespace:   &parentNS,
+					Name:        ref.Name,
+					SectionName: ref.SectionName,
+				},
+				ControllerName: gatewayv1.GatewayController(r.ControllerName),
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(gatewayv1.RouteConditionAccepted),
+						Status:             status,
+						ObservedGeneration: freshRoute.Generation,
+						LastTransitionTime: now,
+						Reason:             reason,
+						Message:            message,
+					},
+					{
+						Type:               string(gatewayv1.RouteConditionResolvedRefs),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: freshRoute.Generation,
+						LastTransitionTime: now,
+						Reason:             string(gatewayv1.RouteReasonResolvedRefs),
+						Message:            resolvedRefsMessage,
+					},
+				},
+			}
+
+			freshRoute.Status.Parents = append(freshRoute.Status.Parents, parentStatus)
+		}
+
+		if err := r.Status().Update(ctx, &freshRoute); err != nil {
+			return errors.Wrap(err, "failed to update grpcroute status")
+		}
+
+		return nil
+	})
+
+	return errors.Wrap(err, "failed to update grpcroute status after retries")
+}
+
+func (r *PingoraGRPCRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.bindingValidator = routebinding.NewValidator(r.Client)
+
+	mapper := &PingoraConfigMapper{
+		Client:           r.Client,
+		GatewayClassName: r.GatewayClassName,
+		ConfigResolver:   r.RouteSyncer.ConfigResolver,
+	}
+
+	err := ctrl.NewControllerManagedBy(mgr).
+		For(&gatewayv1.GRPCRoute{}).
+		// Filter out status-only updates to prevent infinite reconciliation loops.
+		// We only care about spec changes (generation changes) or deletions.
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Watches(
+			&gatewayv1.Gateway{},
+			handler.EnqueueRequestsFromMapFunc(r.findRoutesForGateway),
+		).
+		// Watch PingoraConfig for config changes
+		Watches(
+			&v1alpha1.PingoraConfig{},
+			handler.EnqueueRequestsFromMapFunc(mapper.MapConfigToRequests(r.getAllRelevantRoutes)),
+		).
+		// Watch Secrets for TLS credential changes
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(mapper.MapSecretToRequests(r.getAllRelevantRoutes)),
+		).
+		// Watch ReferenceGrant for cross-namespace permission changes
+		Watches(
+			&gatewayv1beta1.ReferenceGrant{},
+			handler.EnqueueRequestsFromMapFunc(r.findRoutesForReferenceGrant),
+		).
+		Complete(r)
+	if err != nil {
+		return errors.Wrap(err, "failed to setup pingora grpcroute controller")
+	}
+
+	// Add startup runnable for initial sync
+	addErr := mgr.Add(r)
+	if addErr != nil {
+		return errors.Wrap(addErr, "failed to add startup sync runnable")
+	}
+
+	return nil
+}
+
+// Start implements manager.Runnable for startup sync.
+func (r *PingoraGRPCRouteReconciler) Start(ctx context.Context) error {
+	// Mark startup as complete when this function returns,
+	// regardless of success or failure
+	defer r.startupComplete.Store(true)
+
+	logger := logging.Component(ctx, "pingora-grpcroute-startup-sync")
+	logger.Info("performing startup sync of Pingora configuration")
+
+	ctx = logging.WithLogger(ctx, logger)
+
+	_, err := r.syncAndUpdateStatus(ctx)
+	if err != nil {
+		logger.Error("startup sync failed", "error", err)
+		// Don't return error - allow controller to start even if initial sync fails
+	} else {
+		logger.Info("startup sync completed successfully")
+	}
+
+	return nil
+}
+
+func (r *PingoraGRPCRouteReconciler) findRoutesForGateway(
+	ctx context.Context,
+	obj client.Object,
+) []reconcile.Request {
+	var routeList gatewayv1.GRPCRouteList
+	if err := r.List(ctx, &routeList); err != nil {
+		return nil
+	}
+
+	routes := make([]Route, len(routeList.Items))
+	for i := range routeList.Items {
+		routes[i] = GRPCRouteWrapper{&routeList.Items[i]}
+	}
+
+	return FindRoutesForGateway(obj, r.GatewayClassName, routes)
+}
+
+func (r *PingoraGRPCRouteReconciler) findRoutesForReferenceGrant(
+	ctx context.Context,
+	obj client.Object,
+) []reconcile.Request {
+	var routeList gatewayv1.GRPCRouteList
+
+	err := r.List(ctx, &routeList)
+	if err != nil {
+		return nil
+	}
+
+	// Collect routes managed by our Gateway as Route
+	routes := make([]Route, 0, len(routeList.Items))
+
+	for i := range routeList.Items {
+		route := &routeList.Items[i]
+		if r.isRouteForOurGateway(ctx, route) {
+			routes = append(routes, GRPCRouteWrapper{route})
+		}
+	}
+
+	return FindRoutesForReferenceGrant(obj, routes)
+}
+
+func (r *PingoraGRPCRouteReconciler) getAllRelevantRoutes(ctx context.Context) []reconcile.Request {
+	var routeList gatewayv1.GRPCRouteList
+
+	err := r.List(ctx, &routeList)
+	if err != nil {
+		return nil
+	}
+
+	routes := make([]Route, len(routeList.Items))
+	for i := range routeList.Items {
+		routes[i] = GRPCRouteWrapper{&routeList.Items[i]}
+	}
+
+	return FilterAcceptedRoutes(ctx, r.Client, r.bindingValidator, r.GatewayClassName, routes)
+}

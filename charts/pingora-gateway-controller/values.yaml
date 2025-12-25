@@ -1,0 +1,225 @@
+# Default values for pingora-gateway-controller.
+
+# -- PingoraConfig configuration
+# Reference configuration for the Pingora proxy connection.
+pingoraConfig:
+  # -- Create PingoraConfig resource
+  create: true
+  # -- Name of the PingoraConfig (defaults to release fullname)
+  name: ""
+  # -- gRPC endpoint address of the Pingora proxy
+  # Format: "host:port" (e.g., "pingora-proxy.pingora-system.svc.cluster.local:50051")
+  address: ""
+  # -- TLS configuration for gRPC connection
+  tls:
+    # -- Enable TLS for gRPC connection
+    enabled: false
+    # -- Reference to Secret containing TLS certificates
+    # The Secret must contain "tls.crt" and "tls.key" keys.
+    # Optionally include "ca.crt" for CA validation.
+    secretRef:
+      # -- Name of the Secret containing TLS certificates
+      name: ""
+      # -- Namespace of the Secret (defaults to release namespace)
+      namespace: ""
+    # -- Skip TLS certificate verification (WARNING: for testing only)
+    insecureSkipVerify: false
+    # -- Override server name for TLS verification
+    serverName: ""
+  # -- Connection parameters
+  connection:
+    # -- Timeout for establishing connection (seconds)
+    connectTimeoutSeconds: 5
+    # -- Timeout for individual gRPC requests (seconds)
+    requestTimeoutSeconds: 30
+    # -- Interval for keepalive pings (seconds)
+    keepaliveTimeSeconds: 30
+    # -- Maximum number of retries for failed requests
+    maxRetries: 3
+    # -- Backoff duration between retries (milliseconds)
+    retryBackoffMs: 1000
+
+# -- Controller configuration
+controller:
+  # -- GatewayClass name to watch
+  gatewayClassName: "pingora"
+  # -- Controller name for GatewayClass (must be unique in cluster)
+  controllerName: "pingora.k8s.lex.la/gateway-controller"
+  # -- Kubernetes cluster domain for service DNS resolution
+  # @default -- auto-detected from /etc/resolv.conf, fallback: cluster.local
+  clusterDomain: ""
+  # -- Log level (debug, info, warn, error)
+  logLevel: "info"
+  # -- Log format (json, text)
+  logFormat: "json"
+
+# -- Leader election configuration for high availability
+leaderElection:
+  # -- Enable leader election (required for running multiple replicas)
+  enabled: false
+  # -- Namespace for leader election lease (defaults to release namespace)
+  namespace: ""
+  # -- Name of the leader election lease
+  leaseName: "pingora-gateway-controller-leader"
+
+# -- Container image configuration
+image:
+  # -- Image repository
+  repository: ghcr.io/lexfrei/pingora-gateway-controller
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (defaults to appVersion)
+  tag: ""
+
+# -- Image pull secrets for private registries
+imagePullSecrets: []
+
+# -- Override the chart name
+nameOverride: ""
+
+# -- Override the full release name
+fullnameOverride: ""
+
+# -- Service account configuration
+serviceAccount:
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use
+  # If empty, uses the fullname template (release-name-chart-name)
+  name: ""
+
+# -- Annotations to add to pods
+podAnnotations: {}
+
+# -- Additional labels to add to pods
+podLabels: {}
+
+# -- Pod security context (secure defaults)
+# @default -- See values.yaml
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container security context (secure defaults)
+# @default -- See values.yaml
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+# -- Container resource requests and limits
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# -- Node selector for pod scheduling
+nodeSelector: {}
+
+# -- Tolerations for pod scheduling
+tolerations: []
+
+# -- Affinity rules for pod scheduling
+affinity: {}
+
+# -- Topology spread constraints for pod distribution
+topologySpreadConstraints: []
+
+# -- Priority class name for pod scheduling priority
+priorityClassName: ""
+
+# -- Termination grace period in seconds for graceful shutdown
+terminationGracePeriodSeconds: 30
+
+# -- Health probes configuration
+healthProbes:
+  # -- Startup probe configuration
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 12
+  # -- Liveness probe configuration
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+  # -- Readiness probe configuration
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# -- DNS policy for pod (ClusterFirst, Default, ClusterFirstWithHostNet, None)
+dnsPolicy: ""
+
+# -- Custom DNS configuration for pod
+dnsConfig: {}
+
+# -- Number of controller replicas
+replicaCount: 1
+
+# -- PodDisruptionBudget configuration for high availability
+podDisruptionBudget:
+  # -- Enable PodDisruptionBudget
+  enabled: false
+  # -- Minimum number of available pods during disruptions
+  minAvailable: 1
+  # -- Maximum number of unavailable pods during disruptions
+  maxUnavailable: null
+  # -- Policy for evicting unhealthy pods (IfHealthyBudget, AlwaysAllow)
+  unhealthyPodEvictionPolicy: "IfHealthyBudget"
+
+# -- Service configuration
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Metrics endpoint port
+  metricsPort: 8080
+  # -- Health check endpoint port
+  healthPort: 8081
+  # -- Service annotations
+  annotations: {}
+
+# -- ServiceMonitor configuration for Prometheus Operator
+serviceMonitor:
+  # -- Enable ServiceMonitor creation
+  enabled: false
+  # -- Scrape interval (uses Prometheus default if empty)
+  interval: ""
+  # -- Additional labels for ServiceMonitor (for Prometheus selector)
+  labels: {}
+
+# -- NetworkPolicy configuration
+networkPolicy:
+  # -- Enable NetworkPolicy for controller pods
+  enabled: false
+  # -- Ingress source configuration
+  ingress:
+    # -- Allow ingress from specific namespaces/pods
+    from: []
+  # -- Pingora proxy egress configuration
+  pingoraProxy:
+    # -- gRPC port for Pingora proxy
+    port: 50051
+    # -- Namespace selector for Pingora proxy pods
+    namespaceSelector: {}
+    # -- Pod selector for Pingora proxy pods
+    podSelector: {}
+
+# -- GatewayClass configuration
+gatewayClass:
+  # -- Create GatewayClass resource
+  create: true
