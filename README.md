@@ -54,7 +54,7 @@ Route traffic through Pingora using standard Gateway API resources (Gateway, HTT
 
 ```bash
 # 1. Install Gateway API CRDs
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.0/standard-install.yaml
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
 
 # 2. Install the controller (Helm chart coming soon)
 # See docs for manual installation
