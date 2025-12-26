@@ -34,12 +34,12 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create", "patch"]
-  # GatewayClassConfig CRD
-  - apiGroups: ["cf.k8s.lex.la"]
-    resources: ["gatewayclassconfigs"]
+  # PingoraConfig CRD
+  - apiGroups: ["pingora.k8s.lex.la"]
+    resources: ["pingoraconfigs"]
     verbs: ["get", "list", "watch"]
-  - apiGroups: ["cf.k8s.lex.la"]
-    resources: ["gatewayclassconfigs/status"]
+  - apiGroups: ["pingora.k8s.lex.la"]
+    resources: ["pingoraconfigs/status"]
     verbs: ["get", "update", "patch"]
   # Leader election
   - apiGroups: ["coordination.k8s.io"]

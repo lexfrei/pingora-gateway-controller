@@ -1,0 +1,98 @@
+suite: test clusterrole template
+templates:
+  - templates/clusterrole.yaml
+tests:
+  - it: should create ClusterRole
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: ClusterRole
+      - equal:
+          path: apiVersion
+          value: rbac.authorization.k8s.io/v1
+
+  - it: should have RBAC for PingoraConfig CRD
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - pingora.k8s.lex.la
+            resources:
+              - pingoraconfigs
+            verbs:
+              - get
+              - list
+              - watch
+
+  - it: should have RBAC for PingoraConfig status
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - pingora.k8s.lex.la
+            resources:
+              - pingoraconfigs/status
+            verbs:
+              - get
+              - update
+              - patch
+
+  - it: should NOT have rules for cf.k8s.lex.la legacy group
+    asserts:
+      - notContains:
+          path: rules
+          content:
+            apiGroups:
+              - cf.k8s.lex.la
+          any: true
+
+  - it: should have Gateway API resources access
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - gateway.networking.k8s.io
+            resources:
+              - gatewayclasses
+            verbs:
+              - get
+              - list
+              - watch
+
+  - it: should have Gateway status update access
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - gateway.networking.k8s.io
+            resources:
+              - gateways/status
+              - httproutes/status
+              - grpcroutes/status
+            verbs:
+              - get
+              - update
+              - patch
+
+  - it: should have leader election access
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - coordination.k8s.io
+            resources:
+              - leases
+            verbs:
+              - get
+              - list
+              - watch
+              - create
+              - update
+              - patch
+              - delete
