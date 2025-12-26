@@ -2,7 +2,7 @@
 
 # Site metadata
 site_name: Pingora Gateway Controller
-site_url: https://pingora.k8s.lex.la
+site_url: https://pingora-gw.k8s.lex.la
 site_author: Aleksei Sviridkin
 site_description: >-
   Kubernetes Gateway API controller for Pingora proxy.
@@ -81,6 +81,7 @@ plugins:
       enable_creation_date: true
       type: timeago
       fallback_to_build_date: true
+      enable_git_follow: false
   - minify:
       minify_html: true
 

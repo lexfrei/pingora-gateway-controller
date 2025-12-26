@@ -1,0 +1,32 @@
+/* Custom color scheme for Pingora Gateway Controller */
+:root {
+  --md-primary-fg-color: #ff5722;
+  --md-primary-fg-color--light: #ff8a50;
+  --md-primary-fg-color--dark: #c41c00;
+  --md-accent-fg-color: #ff5722;
+}
+
+/* Dark mode adjustments */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #ff5722;
+  --md-accent-fg-color: #ff8a50;
+}
+
+/* Admonition custom styling for Pingora-specific notes */
+.md-typeset .admonition.pingora,
+.md-typeset details.pingora {
+  border-color: #ff5722;
+}
+
+.md-typeset .pingora > .admonition-title,
+.md-typeset .pingora > summary {
+  background-color: rgba(255, 87, 34, 0.1);
+  border-color: #ff5722;
+}
+
+.md-typeset .pingora > .admonition-title::before,
+.md-typeset .pingora > summary::before {
+  background-color: #ff5722;
+  -webkit-mask-image: var(--md-admonition-icon--tip);
+  mask-image: var(--md-admonition-icon--tip);
+}
