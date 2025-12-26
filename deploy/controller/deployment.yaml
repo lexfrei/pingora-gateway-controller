@@ -20,32 +20,21 @@ spec:
       serviceAccountName: pingora-gateway-controller
       securityContext:
         runAsNonRoot: true
+        runAsUser: 65534
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: controller
           image: ghcr.io/lexfrei/pingora-gateway-controller:latest
           args:
-            - --account-id=$(CF_ACCOUNT_ID)
-            - --tunnel-id=$(CF_TUNNEL_ID)
+            - --gateway-class-name=pingora
+            - --controller-name=pingora.k8s.lex.la/gateway-controller
+            - --metrics-addr=:8080
+            - --health-addr=:8081
+            - --log-level=info
+            - --log-format=json
             # cluster-domain is auto-detected from /etc/resolv.conf
-            # To override, add: --cluster-domain=<your-domain> or set CF_CLUSTER_DOMAIN env var
-          env:
-            - name: CF_ACCOUNT_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: pingora-gateway-controller
-                  key: account-id
-            - name: CF_TUNNEL_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: pingora-gateway-controller
-                  key: tunnel-id
-            - name: CF_API_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: pingora-gateway-controller
-                  key: api-token
+            # To override, add: --cluster-domain=cluster.local
           ports:
             - name: metrics
               containerPort: 8080
@@ -67,34 +56,20 @@ spec:
             periodSeconds: 10
           resources:
             limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
               cpu: 100m
               memory: 128Mi
-            requests:
-              cpu: 10m
-              memory: 64Mi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: pingora-gateway-controller
-  namespace: pingora-system
-data:
-  account-id: "YOUR_ACCOUNT_ID"
-  tunnel-id: "YOUR_TUNNEL_ID"
-  # cluster-domain is auto-detected; uncomment to override:
-  # cluster-domain: "cluster.local"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: pingora-gateway-controller
-  namespace: pingora-system
-type: Opaque
-stringData:
-  api-token: "YOUR_API_TOKEN"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
