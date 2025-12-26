@@ -1,0 +1,105 @@
+{{- if .Values.proxy.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pingora-gw-ctrl.fullname" . }}-proxy
+  labels:
+    {{- include "pingora-gw-ctrl.labels" . | nindent 4 }}
+    app.kubernetes.io/component: proxy
+spec:
+  replicas: {{ .Values.proxy.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "pingora-gw-ctrl.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: proxy
+  template:
+    metadata:
+      {{- with .Values.proxy.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "pingora-gw-ctrl.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: proxy
+        {{- with .Values.proxy.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.proxy.priorityClassName }}
+      priorityClassName: {{ .Values.proxy.priorityClassName }}
+      {{- end }}
+      serviceAccountName: {{ include "pingora-gw-ctrl.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.proxy.terminationGracePeriodSeconds | default 30 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: proxy
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          image: "{{ .Values.proxy.image.repository }}:{{ .Values.proxy.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.proxy.image.pullPolicy }}
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.proxy.logLevel | default "info" }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: health
+              containerPort: 9090
+              protocol: TCP
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+          {{- if .Values.proxy.healthProbes.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: {{ .Values.proxy.healthProbes.startupProbe.initialDelaySeconds | default 0 }}
+            periodSeconds: {{ .Values.proxy.healthProbes.startupProbe.periodSeconds | default 5 }}
+            timeoutSeconds: {{ .Values.proxy.healthProbes.startupProbe.timeoutSeconds | default 3 }}
+            failureThreshold: {{ .Values.proxy.healthProbes.startupProbe.failureThreshold | default 12 }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: {{ .Values.proxy.healthProbes.livenessProbe.initialDelaySeconds | default 15 }}
+            periodSeconds: {{ .Values.proxy.healthProbes.livenessProbe.periodSeconds | default 20 }}
+            timeoutSeconds: {{ .Values.proxy.healthProbes.livenessProbe.timeoutSeconds | default 5 }}
+            failureThreshold: {{ .Values.proxy.healthProbes.livenessProbe.failureThreshold | default 3 }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: {{ .Values.proxy.healthProbes.readinessProbe.initialDelaySeconds | default 5 }}
+            periodSeconds: {{ .Values.proxy.healthProbes.readinessProbe.periodSeconds | default 10 }}
+            timeoutSeconds: {{ .Values.proxy.healthProbes.readinessProbe.timeoutSeconds | default 3 }}
+            failureThreshold: {{ .Values.proxy.healthProbes.readinessProbe.failureThreshold | default 3 }}
+          resources:
+            {{- toYaml .Values.proxy.resources | nindent 12 }}
+      {{- with .Values.proxy.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.proxy.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.proxy.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
