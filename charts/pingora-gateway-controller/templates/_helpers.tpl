@@ -87,3 +87,26 @@ Validate PodDisruptionBudget configuration
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+Proxy fullname
+*/}}
+{{- define "pingora-gw-ctrl.proxyFullname" -}}
+{{ include "pingora-gw-ctrl.fullname" . }}-proxy
+{{- end }}
+
+{{/*
+Proxy selector labels
+*/}}
+{{- define "pingora-gw-ctrl.proxySelectorLabels" -}}
+{{ include "pingora-gw-ctrl.selectorLabels" . }}
+app.kubernetes.io/component: proxy
+{{- end }}
+
+{{/*
+Proxy labels
+*/}}
+{{- define "pingora-gw-ctrl.proxyLabels" -}}
+{{ include "pingora-gw-ctrl.labels" . }}
+app.kubernetes.io/component: proxy
+{{- end }}
