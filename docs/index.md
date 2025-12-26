@@ -76,6 +76,56 @@ See [Getting Started](getting-started/index.md) for detailed setup instructions.
 | [Development](development/index.md) | Architecture, contributing, and testing |
 | [Reference](reference/index.md) | Helm chart, CRD reference, security |
 
+## Roadmap
+
+Target: **Gateway API v1.4.1 Standard Channel Conformance**
+
+### Milestones
+
+| Version | Status | Description |
+|---------|--------|-------------|
+| v0.1.0 | :material-clock-outline: Planned | Core Conformance (RequestHeaderModifier, RequestRedirect) |
+| v0.2.0 | :material-clock-outline: Planned | Extended Features (ResponseHeaderModifier, URLRewrite, RequestMirror) |
+| v0.3.0 | :material-clock-outline: Planned | Gateway API v1.4 (supportedFeatures, BackendTLSPolicy) |
+| v0.4.0 | :material-clock-outline: Planned | Conformance Tests & Registration |
+| v1.0.0 | :material-clock-outline: Planned | Production-ready with full conformance |
+
+### Gateway API Support
+
+#### Resources
+
+| Resource | Status |
+|----------|--------|
+| GatewayClass | :material-check-circle: Supported |
+| Gateway | :material-check-circle: Supported |
+| HTTPRoute | :material-check-circle: Supported |
+| GRPCRoute | :material-check-circle: Supported |
+| ReferenceGrant | :material-check-circle: Supported |
+| BackendTLSPolicy | :material-clock-outline: [Planned](https://github.com/lexfrei/pingora-gateway-controller/issues/30) |
+
+#### HTTPRoute Filters
+
+| Filter | Conformance | Status |
+|--------|-------------|--------|
+| RequestHeaderModifier | Core | :material-clock-outline: [Planned](https://github.com/lexfrei/pingora-gateway-controller/issues/23) |
+| RequestRedirect | Core | :material-clock-outline: [Planned](https://github.com/lexfrei/pingora-gateway-controller/issues/24) |
+| ResponseHeaderModifier | Extended | :material-clock-outline: [Planned](https://github.com/lexfrei/pingora-gateway-controller/issues/25) |
+| URLRewrite | Extended | :material-clock-outline: [Planned](https://github.com/lexfrei/pingora-gateway-controller/issues/26) |
+| RequestMirror | Extended | :material-clock-outline: [Planned](https://github.com/lexfrei/pingora-gateway-controller/issues/27) |
+
+#### HTTPRoute Matching (Implemented)
+
+| Feature | Conformance | Status |
+|---------|-------------|--------|
+| Path (Exact, Prefix, Regex) | Core | :material-check-circle: Supported |
+| Header matching | Core | :material-check-circle: Supported |
+| Query parameter matching | Extended | :material-check-circle: Supported |
+| Method matching | Extended | :material-check-circle: Supported |
+| Backend weight | Core | :material-check-circle: Supported |
+| Request timeout | Extended | :material-check-circle: Supported |
+
+See [GitHub Milestones](https://github.com/lexfrei/pingora-gateway-controller/milestones) for detailed progress.
+
 ## Project Links
 
 - [GitHub Repository](https://github.com/lexfrei/pingora-gateway-controller)
