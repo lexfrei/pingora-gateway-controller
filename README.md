@@ -10,7 +10,15 @@ Route traffic through Pingora using standard Gateway API resources (Gateway, HTT
 
 ## Status
 
-**Work in Progress** - This project is under active development.
+**Alpha** - This project is under active development targeting Gateway API v1.4.1 conformance.
+
+| Milestone | Status | Description |
+|-----------|--------|-------------|
+| v0.1.0 | Planned | Core Conformance (RequestHeaderModifier, RequestRedirect) |
+| v0.2.0 | Planned | Extended Features (ResponseHeaderModifier, URLRewrite, RequestMirror) |
+| v0.3.0 | Planned | Gateway API v1.4 Features (supportedFeatures, BackendTLSPolicy) |
+| v0.4.0 | Planned | Conformance Tests & Registration |
+| v1.0.0 | Planned | Production-ready with full conformance |
 
 ## Architecture
 
@@ -35,6 +43,48 @@ Route traffic through Pingora using standard Gateway API resources (Gateway, HTT
 
 - **pingora-gateway-controller** (Go): Kubernetes controller that watches Gateway API resources and syncs routing configuration to Pingora proxy via gRPC
 - **pingora-proxy** (Rust): Custom Pingora-based reverse proxy with gRPC API for dynamic route updates
+
+## Gateway API Support
+
+Target: **Gateway API v1.4.1 Standard Channel**
+
+### Resources
+
+| Resource | Status | Notes |
+|----------|--------|-------|
+| GatewayClass | Supported | with parametersRef to PingoraConfig |
+| Gateway | Supported | listeners, statuses, attachedRoutes |
+| HTTPRoute | Supported | matches, backendRefs, timeouts |
+| GRPCRoute | Supported | service/method matching |
+| ReferenceGrant | Supported | cross-namespace validation |
+| BackendTLSPolicy | Planned | [#30](https://github.com/lexfrei/pingora-gateway-controller/issues/30) |
+
+### HTTPRoute Features
+
+| Feature | Conformance | Status |
+|---------|-------------|--------|
+| Path matching (Exact, Prefix, Regex) | Core | Supported |
+| Header matching | Core | Supported |
+| Query parameter matching | Extended | Supported |
+| Method matching | Extended | Supported |
+| Backend weight | Core | Supported |
+| Request timeout | Extended | Supported |
+| RequestHeaderModifier | Core | [Planned #23](https://github.com/lexfrei/pingora-gateway-controller/issues/23) |
+| RequestRedirect | Core | [Planned #24](https://github.com/lexfrei/pingora-gateway-controller/issues/24) |
+| ResponseHeaderModifier | Extended | [Planned #25](https://github.com/lexfrei/pingora-gateway-controller/issues/25) |
+| URLRewrite | Extended | [Planned #26](https://github.com/lexfrei/pingora-gateway-controller/issues/26) |
+| RequestMirror | Extended | [Planned #27](https://github.com/lexfrei/pingora-gateway-controller/issues/27) |
+
+### GRPCRoute Features
+
+| Feature | Conformance | Status |
+|---------|-------------|--------|
+| Service/Method matching | Core | Supported |
+| Header matching | Core | Supported |
+| Backend weight | Core | Supported |
+| RequestHeaderModifier | Core | [Planned #23](https://github.com/lexfrei/pingora-gateway-controller/issues/23) |
+| ResponseHeaderModifier | Extended | [Planned #25](https://github.com/lexfrei/pingora-gateway-controller/issues/25) |
+| RequestMirror | Extended | [Planned #27](https://github.com/lexfrei/pingora-gateway-controller/issues/27) |
 
 ## Features
 
@@ -77,6 +127,24 @@ spec:
           port: 80
 EOF
 ```
+
+## Documentation
+
+Full documentation is available at [pingora-gw.k8s.lex.la](https://pingora-gw.k8s.lex.la).
+
+## Roadmap
+
+See the [project milestones](https://github.com/lexfrei/pingora-gateway-controller/milestones) for planned features.
+
+Key upcoming features:
+
+- [#23](https://github.com/lexfrei/pingora-gateway-controller/issues/23) RequestHeaderModifier filter (Core)
+- [#24](https://github.com/lexfrei/pingora-gateway-controller/issues/24) RequestRedirect filter (Core)
+- [#25](https://github.com/lexfrei/pingora-gateway-controller/issues/25) ResponseHeaderModifier filter (Extended)
+- [#26](https://github.com/lexfrei/pingora-gateway-controller/issues/26) URLRewrite filter (Extended)
+- [#27](https://github.com/lexfrei/pingora-gateway-controller/issues/27) RequestMirror filter (Extended)
+- [#30](https://github.com/lexfrei/pingora-gateway-controller/issues/30) BackendTLSPolicy support
+- [#31](https://github.com/lexfrei/pingora-gateway-controller/issues/31) Gateway API conformance tests
 
 ## License
 
