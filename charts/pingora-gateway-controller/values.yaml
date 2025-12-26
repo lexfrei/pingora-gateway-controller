@@ -223,3 +223,82 @@ networkPolicy:
 gatewayClass:
   # -- Create GatewayClass resource
   create: true
+
+# -- Pingora proxy deployment configuration
+proxy:
+  # -- Enable proxy deployment
+  enabled: true
+
+  # -- Number of proxy replicas
+  replicaCount: 2
+
+  # -- Container image configuration
+  image:
+    # -- Image repository
+    repository: ghcr.io/lexfrei/pingora-proxy
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+    # -- Image tag (defaults to appVersion)
+    tag: ""
+
+  # -- Log level for proxy (trace, debug, info, warn, error)
+  logLevel: "info"
+
+  # -- Annotations to add to proxy pods
+  podAnnotations: {}
+
+  # -- Additional labels to add to proxy pods
+  podLabels: {}
+
+  # -- Container resource requests and limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # -- Service configuration
+  service:
+    # -- Service type
+    type: ClusterIP
+    # -- Service annotations
+    annotations: {}
+
+  # -- Health probes configuration
+  healthProbes:
+    # -- Startup probe configuration
+    startupProbe:
+      enabled: true
+      initialDelaySeconds: 0
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 12
+    # -- Liveness probe configuration
+    livenessProbe:
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 3
+    # -- Readiness probe configuration
+    readinessProbe:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+
+  # -- Node selector for pod scheduling
+  nodeSelector: {}
+
+  # -- Tolerations for pod scheduling
+  tolerations: []
+
+  # -- Affinity rules for pod scheduling
+  affinity: {}
+
+  # -- Priority class name for pod scheduling priority
+  priorityClassName: ""
+
+  # -- Termination grace period in seconds
+  terminationGracePeriodSeconds: 30
