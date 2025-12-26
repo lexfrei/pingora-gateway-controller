@@ -1,0 +1,282 @@
+suite: test proxy deployment template
+templates:
+  - templates/proxy-deployment.yaml
+tests:
+  - it: should create Deployment when proxy is enabled
+    set:
+      proxy.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
+      - equal:
+          path: apiVersion
+          value: apps/v1
+
+  - it: should not create Deployment when proxy is disabled
+    set:
+      proxy.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should use correct image with custom tag
+    set:
+      proxy.enabled: true
+      proxy.image.repository: ghcr.io/lexfrei/pingora-proxy
+      proxy.image.tag: v1.0.0
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/lexfrei/pingora-proxy:v1.0.0
+
+  - it: should use Chart.AppVersion when tag not specified
+    chart:
+      appVersion: 0.0.1
+    set:
+      proxy.enabled: true
+      proxy.image.tag: ""
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":0.0.1$"
+
+  - it: should set correct replicas
+    set:
+      proxy.enabled: true
+      proxy.replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  - it: should expose HTTP port 8080
+    set:
+      proxy.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: http
+            containerPort: 8080
+            protocol: TCP
+
+  - it: should expose health port 9090
+    set:
+      proxy.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: health
+            containerPort: 9090
+            protocol: TCP
+
+  - it: should expose gRPC port 50051
+    set:
+      proxy.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: grpc
+            containerPort: 50051
+            protocol: TCP
+
+  - it: should configure liveness probe on health port
+    set:
+      proxy.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /healthz
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.port
+          value: health
+
+  - it: should configure readiness probe on health port
+    set:
+      proxy.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /readyz
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.port
+          value: health
+
+  - it: should run as non-root user 65534
+    set:
+      proxy.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 65534
+
+  - it: should have secure container securityContext
+    set:
+      proxy.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation
+          value: false
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - contains:
+          path: spec.template.spec.containers[0].securityContext.capabilities.drop
+          content: ALL
+
+  - it: should set RUST_LOG environment variable
+    set:
+      proxy.enabled: true
+      proxy.logLevel: debug
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: RUST_LOG
+            value: debug
+
+  - it: should configure resources
+    set:
+      proxy.enabled: true
+      proxy.resources.requests.cpu: 200m
+      proxy.resources.requests.memory: 256Mi
+      proxy.resources.limits.cpu: 500m
+      proxy.resources.limits.memory: 512Mi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: 200m
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 256Mi
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+          value: 500m
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 512Mi
+
+  - it: should have proxy-specific selector labels
+    release:
+      name: test
+    set:
+      proxy.enabled: true
+    asserts:
+      - equal:
+          path: spec.selector.matchLabels["app.kubernetes.io/component"]
+          value: proxy
+
+  - it: should use shared serviceAccount
+    release:
+      name: test
+    set:
+      proxy.enabled: true
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.serviceAccountName
+          pattern: ^test-
+
+  - it: should support custom pod annotations
+    set:
+      proxy.enabled: true
+      proxy.podAnnotations:
+        custom/annotation: "value"
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["custom/annotation"]
+          value: "value"
+
+  - it: should support custom pod labels
+    set:
+      proxy.enabled: true
+      proxy.podLabels:
+        custom-label: "value"
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels.custom-label
+          value: "value"
+
+  - it: should support node selector
+    set:
+      proxy.enabled: true
+      proxy.nodeSelector:
+        kubernetes.io/os: linux
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector["kubernetes.io/os"]
+          value: linux
+
+  - it: should support tolerations
+    set:
+      proxy.enabled: true
+      proxy.tolerations:
+        - key: "node-role.kubernetes.io/master"
+          operator: "Exists"
+          effect: "NoSchedule"
+    asserts:
+      - contains:
+          path: spec.template.spec.tolerations
+          content:
+            key: "node-role.kubernetes.io/master"
+            operator: "Exists"
+            effect: "NoSchedule"
+
+  - it: should support affinity rules
+    set:
+      proxy.enabled: true
+      proxy.affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+    asserts:
+      - isNotNull:
+          path: spec.template.spec.affinity.podAntiAffinity
+
+  - it: should have correct name with proxy suffix
+    release:
+      name: test
+    set:
+      proxy.enabled: true
+    asserts:
+      - matchRegex:
+          path: metadata.name
+          pattern: -proxy$
+
+  - it: should have standard labels
+    set:
+      proxy.enabled: true
+    asserts:
+      - isNotNull:
+          path: metadata.labels
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: proxy
+
+  - it: should configure startup probe when enabled
+    set:
+      proxy.enabled: true
+      proxy.healthProbes.startupProbe.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe.httpGet.path
+          value: /healthz
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe.httpGet.port
+          value: health
+
+  - it: should not have startup probe when disabled
+    set:
+      proxy.enabled: true
+      proxy.healthProbes.startupProbe.enabled: false
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].startupProbe

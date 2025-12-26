@@ -49,10 +49,31 @@ Next Steps:
              port: 80
    EOF
 
+{{- if .Values.proxy.enabled }}
+
+Pingora Proxy:
+  The proxy is deployed and listening on:
+    - HTTP traffic: port 8080
+    - Health endpoints: port 9090 (/healthz, /readyz)
+    - gRPC API: port 50051
+
+  Verify proxy deployment:
+    kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/component=proxy
+
+  Check proxy logs:
+    kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=proxy --follow
+{{- end }}
+
 {{- if .Values.pingoraConfig.create }}
 
-Important: Ensure your PingoraConfig has a valid Pingora proxy address:
-  kubectl get pingoraconfig {{ include "pingora-gw-ctrl.pingoraConfigName" . }}
+PingoraConfig:
+  {{- if .Values.proxy.enabled }}
+  Configuration auto-generated to connect to the deployed proxy.
+  {{- else }}
+  Important: Ensure PingoraConfig has a valid Pingora proxy address.
+  {{- end }}
+  Verify configuration:
+    kubectl get pingoraconfig {{ include "pingora-gw-ctrl.pingoraConfigName" . }}
 {{- end }}
 
 {{- if and (gt (.Values.replicaCount | int) 1) (not .Values.podDisruptionBudget.enabled) }}

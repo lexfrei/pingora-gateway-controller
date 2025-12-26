@@ -1,0 +1,155 @@
+suite: test pingoraconfig template
+templates:
+  - templates/pingoraconfig.yaml
+tests:
+  - it: should create PingoraConfig when enabled
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.address: "pingora-proxy:50051"
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: PingoraConfig
+      - equal:
+          path: apiVersion
+          value: pingora.k8s.lex.la/v1alpha1
+
+  - it: should not create PingoraConfig when disabled
+    set:
+      pingoraConfig.create: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should use custom name when specified
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.name: my-custom-config
+      pingoraConfig.address: "proxy:50051"
+    asserts:
+      - equal:
+          path: metadata.name
+          value: my-custom-config
+
+  - it: should use fullname when name not specified
+    release:
+      name: my-release
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.name: ""
+      pingoraConfig.address: "proxy:50051"
+    asserts:
+      - matchRegex:
+          path: metadata.name
+          pattern: ^my-release
+
+  - it: should set correct address
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.address: "pingora-proxy.default.svc.cluster.local:50051"
+    asserts:
+      - equal:
+          path: spec.address
+          value: "pingora-proxy.default.svc.cluster.local:50051"
+
+  - it: should auto-configure address when proxy is enabled and address is empty
+    release:
+      name: test
+      namespace: pingora-system
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.address: ""
+      proxy.enabled: true
+    asserts:
+      - equal:
+          path: spec.address
+          value: "test-pingora-gateway-controller-proxy.pingora-system.svc.cluster.local:50051"
+
+  - it: should configure TLS when enabled
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.address: "proxy:50051"
+      pingoraConfig.tls.enabled: true
+      pingoraConfig.tls.secretRef.name: my-tls-secret
+      pingoraConfig.tls.secretRef.namespace: my-namespace
+    asserts:
+      - equal:
+          path: spec.tls.enabled
+          value: true
+      - equal:
+          path: spec.tls.secretRef.name
+          value: my-tls-secret
+      - equal:
+          path: spec.tls.secretRef.namespace
+          value: my-namespace
+
+  - it: should not have tls section when disabled
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.address: "proxy:50051"
+      pingoraConfig.tls.enabled: false
+    asserts:
+      - isNull:
+          path: spec.tls
+
+  - it: should set insecureSkipVerify when enabled
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.address: "proxy:50051"
+      pingoraConfig.tls.enabled: true
+      pingoraConfig.tls.insecureSkipVerify: true
+    asserts:
+      - equal:
+          path: spec.tls.insecureSkipVerify
+          value: true
+
+  - it: should set serverName when specified
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.address: "proxy:50051"
+      pingoraConfig.tls.enabled: true
+      pingoraConfig.tls.serverName: "custom.server.name"
+    asserts:
+      - equal:
+          path: spec.tls.serverName
+          value: "custom.server.name"
+
+  - it: should set connection parameters
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.address: "proxy:50051"
+      pingoraConfig.connection.connectTimeoutSeconds: 10
+      pingoraConfig.connection.requestTimeoutSeconds: 60
+      pingoraConfig.connection.keepaliveTimeSeconds: 45
+      pingoraConfig.connection.maxRetries: 5
+      pingoraConfig.connection.retryBackoffMs: 2000
+    asserts:
+      - equal:
+          path: spec.connection.connectTimeoutSeconds
+          value: 10
+      - equal:
+          path: spec.connection.requestTimeoutSeconds
+          value: 60
+      - equal:
+          path: spec.connection.keepaliveTimeSeconds
+          value: 45
+      - equal:
+          path: spec.connection.maxRetries
+          value: 5
+      - equal:
+          path: spec.connection.retryBackoffMs
+          value: 2000
+
+  - it: should have standard labels
+    release:
+      name: test-release
+    set:
+      pingoraConfig.create: true
+      pingoraConfig.address: "proxy:50051"
+    asserts:
+      - isNotNull:
+          path: metadata.labels
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: pingora-gateway-controller

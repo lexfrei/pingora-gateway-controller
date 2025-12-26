@@ -1,0 +1,51 @@
+{{- if .Values.pingoraConfig.create }}
+apiVersion: pingora.k8s.lex.la/v1alpha1
+kind: PingoraConfig
+metadata:
+  name: {{ .Values.pingoraConfig.name | default (include "pingora-gw-ctrl.fullname" .) }}
+  labels:
+    {{- include "pingora-gw-ctrl.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.pingoraConfig.address }}
+  address: {{ .Values.pingoraConfig.address | quote }}
+  {{- else if .Values.proxy.enabled }}
+  address: {{ printf "%s-proxy.%s.svc.cluster.local:50051" (include "pingora-gw-ctrl.fullname" .) .Release.Namespace | quote }}
+  {{- else }}
+  address: ""
+  {{- end }}
+  {{- if .Values.pingoraConfig.tls.enabled }}
+  tls:
+    enabled: true
+    {{- if .Values.pingoraConfig.tls.secretRef.name }}
+    secretRef:
+      name: {{ .Values.pingoraConfig.tls.secretRef.name }}
+      {{- if .Values.pingoraConfig.tls.secretRef.namespace }}
+      namespace: {{ .Values.pingoraConfig.tls.secretRef.namespace }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.pingoraConfig.tls.insecureSkipVerify }}
+    insecureSkipVerify: true
+    {{- end }}
+    {{- if .Values.pingoraConfig.tls.serverName }}
+    serverName: {{ .Values.pingoraConfig.tls.serverName | quote }}
+    {{- end }}
+  {{- end }}
+  {{- with .Values.pingoraConfig.connection }}
+  connection:
+    {{- if .connectTimeoutSeconds }}
+    connectTimeoutSeconds: {{ .connectTimeoutSeconds }}
+    {{- end }}
+    {{- if .requestTimeoutSeconds }}
+    requestTimeoutSeconds: {{ .requestTimeoutSeconds }}
+    {{- end }}
+    {{- if .keepaliveTimeSeconds }}
+    keepaliveTimeSeconds: {{ .keepaliveTimeSeconds }}
+    {{- end }}
+    {{- if .maxRetries }}
+    maxRetries: {{ .maxRetries }}
+    {{- end }}
+    {{- if .retryBackoffMs }}
+    retryBackoffMs: {{ .retryBackoffMs }}
+    {{- end }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,139 @@
+suite: test proxy service template
+templates:
+  - templates/proxy-service.yaml
+tests:
+  - it: should create Service when proxy is enabled
+    set:
+      proxy.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Service
+      - equal:
+          path: apiVersion
+          value: v1
+
+  - it: should not create Service when proxy is disabled
+    set:
+      proxy.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should expose HTTP port 8080
+    set:
+      proxy.enabled: true
+    asserts:
+      - contains:
+          path: spec.ports
+          content:
+            name: http
+            port: 8080
+            targetPort: http
+            protocol: TCP
+
+  - it: should expose gRPC port 50051
+    set:
+      proxy.enabled: true
+    asserts:
+      - contains:
+          path: spec.ports
+          content:
+            name: grpc
+            port: 50051
+            targetPort: grpc
+            protocol: TCP
+
+  - it: should expose health port 9090
+    set:
+      proxy.enabled: true
+    asserts:
+      - contains:
+          path: spec.ports
+          content:
+            name: health
+            port: 9090
+            targetPort: health
+            protocol: TCP
+
+  - it: should select proxy pods
+    set:
+      proxy.enabled: true
+    asserts:
+      - equal:
+          path: spec.selector["app.kubernetes.io/component"]
+          value: proxy
+
+  - it: should use ClusterIP by default
+    set:
+      proxy.enabled: true
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+
+  - it: should support LoadBalancer type
+    set:
+      proxy.enabled: true
+      proxy.service.type: LoadBalancer
+    asserts:
+      - equal:
+          path: spec.type
+          value: LoadBalancer
+
+  - it: should support NodePort type
+    set:
+      proxy.enabled: true
+      proxy.service.type: NodePort
+    asserts:
+      - equal:
+          path: spec.type
+          value: NodePort
+
+  - it: should support custom annotations
+    set:
+      proxy.enabled: true
+      proxy.service.annotations:
+        external-dns.alpha.kubernetes.io/hostname: proxy.example.com
+        service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    asserts:
+      - equal:
+          path: metadata.annotations["external-dns.alpha.kubernetes.io/hostname"]
+          value: proxy.example.com
+      - equal:
+          path: metadata.annotations["service.beta.kubernetes.io/aws-load-balancer-type"]
+          value: nlb
+
+  - it: should have correct name with proxy suffix
+    release:
+      name: test
+    set:
+      proxy.enabled: true
+    asserts:
+      - matchRegex:
+          path: metadata.name
+          pattern: -proxy$
+
+  - it: should have standard labels
+    set:
+      proxy.enabled: true
+    asserts:
+      - isNotNull:
+          path: metadata.labels
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: proxy
+
+  - it: should have proper selector labels
+    release:
+      name: my-release
+    set:
+      proxy.enabled: true
+    asserts:
+      - equal:
+          path: spec.selector["app.kubernetes.io/name"]
+          value: pingora-gateway-controller
+      - matchRegex:
+          path: spec.selector["app.kubernetes.io/instance"]
+          pattern: ^my-release$

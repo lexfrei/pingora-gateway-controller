@@ -1,0 +1,194 @@
+suite: test controller deployment template
+templates:
+  - templates/deployment.yaml
+tests:
+  - it: should create Deployment
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
+      - equal:
+          path: apiVersion
+          value: apps/v1
+
+  - it: should use correct image with custom tag
+    set:
+      image.repository: ghcr.io/lexfrei/pingora-gateway-controller
+      image.tag: v1.0.0
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/lexfrei/pingora-gateway-controller:v1.0.0
+
+  - it: should use Chart.AppVersion when tag not specified
+    chart:
+      appVersion: 0.0.1
+    set:
+      image.tag: ""
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":0.0.1$"
+
+  - it: should set gateway class name argument
+    set:
+      controller.gatewayClassName: my-gateway
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: "--gateway-class-name=my-gateway"
+
+  - it: should set controller name argument
+    set:
+      controller.controllerName: custom.controller/name
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: "--controller-name=custom.controller/name"
+
+  - it: should enable leader election when configured
+    set:
+      leaderElection.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: "--leader-elect=true"
+
+  - it: should not enable leader election by default
+    set:
+      leaderElection.enabled: false
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].args
+          content: "--leader-elect=true"
+
+  - it: should set log level
+    set:
+      controller.logLevel: debug
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: "--log-level=debug"
+
+  - it: should set log format
+    set:
+      controller.logFormat: text
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: "--log-format=text"
+
+  - it: should run as non-root user
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 65534
+
+  - it: should have secure container securityContext
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation
+          value: false
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - contains:
+          path: spec.template.spec.containers[0].securityContext.capabilities.drop
+          content: ALL
+
+  - it: should expose metrics port 8080
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: metrics
+            containerPort: 8080
+            protocol: TCP
+
+  - it: should expose health port 8081
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: health
+            containerPort: 8081
+            protocol: TCP
+
+  - it: should configure liveness probe
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /healthz
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.port
+          value: 8081
+
+  - it: should configure readiness probe
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /readyz
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.port
+          value: 8081
+
+  - it: should configure resources
+    set:
+      resources.requests.cpu: 100m
+      resources.requests.memory: 128Mi
+      resources.limits.cpu: 200m
+      resources.limits.memory: 256Mi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: 100m
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 128Mi
+
+  - it: should set correct replicas
+    set:
+      replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  - it: should support custom pod annotations
+    set:
+      podAnnotations:
+        custom/annotation: "value"
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["custom/annotation"]
+          value: "value"
+
+  - it: should support custom pod labels
+    set:
+      podLabels:
+        custom-label: "value"
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels.custom-label
+          value: "value"
+
+  - it: should support node selector
+    set:
+      nodeSelector:
+        kubernetes.io/os: linux
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector["kubernetes.io/os"]
+          value: linux
+
+  - it: should have standard labels
+    asserts:
+      - isNotNull:
+          path: metadata.labels
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: pingora-gateway-controller
