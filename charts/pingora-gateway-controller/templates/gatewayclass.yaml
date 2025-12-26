@@ -7,10 +7,10 @@ metadata:
     {{- include "pingora-gw-ctrl.labels" . | nindent 4 }}
 spec:
   controllerName: {{ .Values.controller.controllerName }}
-  {{- if .Values.gatewayClassConfig.create }}
+  {{- if .Values.pingoraConfig.create }}
   parametersRef:
-    group: cf.k8s.lex.la
-    kind: GatewayClassConfig
-    name: {{ .Values.gatewayClassConfig.name | default (include "pingora-gw-ctrl.fullname" .) }}
+    group: pingora.k8s.lex.la
+    kind: PingoraConfig
+    name: {{ .Values.pingoraConfig.name | default (include "pingora-gw-ctrl.fullname" .) }}
   {{- end }}
 {{- end }}
